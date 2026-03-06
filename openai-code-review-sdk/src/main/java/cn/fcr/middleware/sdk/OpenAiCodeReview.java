@@ -58,7 +58,7 @@ public class OpenAiCodeReview {
         connection.setRequestProperty("User-Agent", "Java/11 OpenAiCodeReview");
         connection.setDoOutput(true);
         connection.setConnectTimeout(5000); // 5秒连接不上就报错
-        connection.setReadTimeout(90000);    // 30秒没返回结果就报错
+        connection.setReadTimeout(90000);    // 90秒没返回结果就报错
 
         // 构建请求体
         List<ChatCompletionRequest.Prompt> prompts = new ArrayList<>();
