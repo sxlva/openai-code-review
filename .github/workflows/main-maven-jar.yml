@@ -31,4 +31,6 @@ jobs:
         run: mvn dependency:copy -Dartifact=cn.fcr.middleware:openai-code-review-sdk:1.0 -DoutputDirectory=./libs
 
       - name: Run Code Review
+        env:
+          ZHIPU_AI_API_KEY: ${{ secrets.ZHIPU_AI_API_KEY }}
         run: java -jar ./libs/openai-code-review-sdk-1.0.jar
