@@ -26,7 +26,7 @@ public class OpenAiCodeReview {
         int exitCode = process.waitFor();
         if (exitCode == 0) {
             System.out.println("Exited with code:" + exitCode);
-            System.out.println("评审代码内容：\n" + diffCode.toString());
+            System.out.println("评审代码内容：\n" + diffCode);
         } else {
             System.err.println("Git 命令执行失败，退出码：" + exitCode);
         }
