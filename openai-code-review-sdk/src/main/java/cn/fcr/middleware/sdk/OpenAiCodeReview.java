@@ -3,22 +3,28 @@ package cn.fcr.middleware.sdk;
 import cn.fcr.middleware.sdk.model.ChatCompletionRequest;
 import cn.fcr.middleware.sdk.model.ChatCompletionSyncResponse;
 import com.alibaba.fastjson2.JSON;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Random;
 
 public class OpenAiCodeReview {
 
     public static void main(String[] args) throws Exception {
-        System.out.println("测试执行");
+        System.out.println("代码评审， 测试执行");
+
+        String token = System.getenv("GITHUB_TOKEN");
+        if (token == null || token.trim().isEmpty()) {
+            throw new RuntimeException("环境变量 `GITHUB_TOKEN` 未设置");
+        }
 
         // 1. 代码检出
         ProcessBuilder processBuilder = new ProcessBuilder("git", "diff", "HEAD~1", "HEAD")
@@ -41,6 +47,9 @@ public class OpenAiCodeReview {
 
         String log = codeReview(diffCode.toString());
         System.out.println("code review：\n" + log);
+
+        String logUrl = writeLog(token, log);
+        System.out.println("writeLog：" + logUrl);
     }
 
     private static String codeReview(String diffCode) throws Exception {
@@ -76,6 +85,7 @@ public class OpenAiCodeReview {
         }
 
         int responseCode = connection.getResponseCode();
+        // 获取ai回复消息体，无论成功还是失败都要读取，以便调试和日志记录
         String responseBody = readBody(connection, responseCode);
         connection.disconnect();
 
@@ -83,6 +93,7 @@ public class OpenAiCodeReview {
             throw new RuntimeException("大模型请求失败，HTTP " + responseCode + "，响应：" + responseBody);
         }
 
+        // 解析响应体，提取评审内容
         ChatCompletionSyncResponse response = JSON.parseObject(responseBody, ChatCompletionSyncResponse.class);
         if (response == null || response.getChoices() == null || response.getChoices().isEmpty()
                 || response.getChoices().get(0) == null
@@ -106,6 +117,13 @@ public class OpenAiCodeReview {
         return reviewBuilder.toString();
     }
 
+    /**
+     * 读取响应体，无论是成功还是失败都要读取，以便调试和日志记录
+     * @param connection HTTP连接对象
+     * @param responseCode HTTP响应码
+     * @return 响应体字符串
+     * @throws Exception 读取响应体失败时抛出异常
+     */
     private static String readBody(HttpURLConnection connection, int responseCode) throws Exception {
         InputStream stream = (responseCode >= 200 && responseCode < 300)
                 ? connection.getInputStream()
@@ -116,6 +134,7 @@ public class OpenAiCodeReview {
         }
 
         StringBuilder content = new StringBuilder();
+        // 字节转字符
         try (BufferedReader in = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             String line;
             while ((line = in.readLine()) != null) {
@@ -124,4 +143,48 @@ public class OpenAiCodeReview {
         }
         return content.toString();
     }
+
+    private static String writeLog(String token, String log) throws Exception {
+        try (Git git = Git.cloneRepository()
+                .setURI("https://github.com/sxlva/openai-code-review-log.git")
+                .setDirectory(new File("repo"))
+                .setCredentialsProvider(new UsernamePasswordCredentialsProvider(token, ""))
+                .call()) {
+
+            // 1. 获取当天日期的文件夹，如果不存在就创建
+            String dateFolderName = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+            File dateFolder = new File("repo/" + dateFolderName);
+            if (!dateFolder.exists()) {
+                dateFolder.mkdirs();
+            }
+
+            // 2. 写文件逻辑
+            String fileName = generateRandomString(12) + ".md";
+            File newFile = new File(dateFolder, fileName);
+            try (FileWriter writer = new FileWriter(newFile)) {
+                writer.write(log);
+            }
+
+            // 3. 执行 Git 操作
+            git.add().addFilepattern(dateFolderName + "/" + fileName).call();
+            git.commit().setMessage("Add new file via GitHub Actions").call();
+            git.push().setCredentialsProvider(new UsernamePasswordCredentialsProvider(token, "")).call();
+
+            System.out.println("Changes have been pushed to the repository.");
+
+            return "https://github.com/sxlva/openai-code-review-log/blob/master/" + dateFolderName + "/" + fileName;
+        }
+
+    }
+
+    private static String generateRandomString(int length) {
+        String characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        Random random = new Random();
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            sb.append(characters.charAt(random.nextInt(characters.length())));
+        }
+        return sb.toString();
+    }
+
 }

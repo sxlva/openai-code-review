@@ -33,4 +33,5 @@ jobs:
       - name: Run Code Review
         env:
           ZHIPU_AI_API_KEY: ${{ secrets.ZHIPU_AI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.CODE_TOKEN }}
         run: java -jar ./libs/openai-code-review-sdk-1.0.jar
