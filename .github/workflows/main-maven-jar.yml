@@ -12,6 +12,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Job 级别注入，所有 steps（含 mvn clean install）均可读取
+    env:
+      ZHIPU_AI_API_KEY: ${{ secrets.ZHIPU_AI_API_KEY }}
+      GITHUB_TOKEN: ${{ secrets.CODE_TOKEN }}
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_SECRET: ${{ secrets.APP_SECRET }}
+      TOUSER: ${{ secrets.TOUSER }}
+      TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -31,7 +40,4 @@ jobs:
         run: mvn dependency:copy -Dartifact=cn.fcr.middleware:openai-code-review-sdk:1.0 -DoutputDirectory=./libs
 
       - name: Run Code Review
-        env:
-          ZHIPU_AI_API_KEY: ${{ secrets.ZHIPU_AI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.CODE_TOKEN }}
         run: java -jar ./libs/openai-code-review-sdk-1.0.jar

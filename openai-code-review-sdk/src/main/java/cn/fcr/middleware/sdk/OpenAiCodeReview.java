@@ -1,8 +1,11 @@
 package cn.fcr.middleware.sdk;
 
-import cn.fcr.middleware.sdk.model.ChatCompletionRequest;
-import cn.fcr.middleware.sdk.model.ChatCompletionSyncResponse;
+import cn.fcr.middleware.sdk.domain.model.ChatCompletionRequest;
+import cn.fcr.middleware.sdk.domain.model.ChatCompletionSyncResponse;
+import cn.fcr.middleware.sdk.domain.model.Message;
+import cn.fcr.middleware.sdk.types.utils.WXAccessTokenUtils;
 import com.alibaba.fastjson2.JSON;
+import lombok.extern.slf4j.Slf4j;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
@@ -11,16 +14,13 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
+@Slf4j
 public class OpenAiCodeReview {
 
     public static void main(String[] args) throws Exception {
-        System.out.println("代码评审， 测试执行");
-
+        log.info("openai 代码评审，测试执行");
         String token = System.getenv("GITHUB_TOKEN");
         if (token == null || token.trim().isEmpty()) {
             throw new RuntimeException("环境变量 `GITHUB_TOKEN` 未设置");
@@ -45,11 +45,24 @@ public class OpenAiCodeReview {
             throw new RuntimeException("Git 命令执行失败，退出码：" + exitCode);
         }
 
-        String log = codeReview(diffCode.toString());
-        System.out.println("code review：\n" + log);
+        // 2. chatglm 代码评审
+        log.info("开始请求 ChatGLM 进行代码评审");
+        String reviewResult = codeReview(diffCode.toString());
+        log.info("code review： {}", reviewResult);
 
-        String logUrl = writeLog(token, log);
-        System.out.println("writeLog：" + logUrl);
+        // 3. 写入评审日志
+        try {
+            String logUrl = writeLog(token, reviewResult);
+            log.info("评审日志写入成功，writeLog： {}", logUrl);
+
+            // 4. 消息通知
+            log.info("准备发送微信消息通知: {}", logUrl);
+            pushMessage(logUrl);
+        } catch (Exception e) {
+            // 5. 打印异常
+            log.error("代码评审后续处理流程发生异常", e);
+        }
+
     }
 
     private static String codeReview(String diffCode) throws Exception {
@@ -144,7 +157,7 @@ public class OpenAiCodeReview {
         return content.toString();
     }
 
-    private static String writeLog(String token, String log) throws Exception {
+    private static String writeLog(String token, String reviewResult) throws Exception {
         try (Git git = Git.cloneRepository()
                 .setURI("https://github.com/sxlva/openai-code-review-log.git")
                 .setDirectory(new File("repo"))
@@ -162,7 +175,7 @@ public class OpenAiCodeReview {
             String fileName = generateRandomString(12) + ".md";
             File newFile = new File(dateFolder, fileName);
             try (FileWriter writer = new FileWriter(newFile)) {
-                writer.write(log);
+                writer.write(reviewResult);
             }
 
             // 3. 执行 Git 操作
@@ -185,6 +198,42 @@ public class OpenAiCodeReview {
             sb.append(characters.charAt(random.nextInt(characters.length())));
         }
         return sb.toString();
+    }
+
+    private static void pushMessage(String logUrl) {
+        String accessToken = WXAccessTokenUtils.getAccessToken();
+        System.out.println(accessToken);
+
+        Message message = new Message();
+        message.put("project", "big-market");
+        message.put("review", logUrl);
+        message.setUrl(logUrl);
+
+        String url = String.format("https://api.weixin.qq.com/cgi-bin/message/template/send?access_token=%s", accessToken);
+        sendPostRequest(url, JSON.toJSONString(message));
+    }
+
+    private static void sendPostRequest(String urlString, String jsonBody) {
+        try {
+            URL url = new URL(urlString);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; utf-8");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setDoOutput(true);
+
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonBody.getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+            }
+
+            try (Scanner scanner = new Scanner(conn.getInputStream(), StandardCharsets.UTF_8.name())) {
+                String response = scanner.useDelimiter("\\A").next();
+                System.out.println(response);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
 }
