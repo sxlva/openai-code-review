@@ -5,8 +5,8 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>cn.fcr.middleware</groupId>
-    <artifactId>openai-code-review</artifactId>
-    <version>1.0</version>
+        <artifactId>openai-code-review</artifactId>
+        <version>1.0</version>
     </parent>
 
     <artifactId>openai-code-review-test</artifactId>
@@ -38,6 +38,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -52,7 +53,6 @@
         <dependency>
             <groupId>cn.fcr.middleware</groupId>
             <artifactId>openai-code-review-sdk</artifactId>
-            <version>1.0</version>
         </dependency>
     </dependencies>
 
@@ -80,7 +80,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.6</version>
                 <configuration>
                     <skipTests>true</skipTests>
                     <testFailureIgnore>false</testFailureIgnore>
@@ -93,7 +92,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>cn.fcr.Application</mainClass>
+                    <mainClass>cn.fcr.middleware.Application</mainClass>
                     <layout>JAR</layout>
                 </configuration>
             </plugin>
