@@ -11,6 +11,7 @@ import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
 import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -18,6 +19,11 @@ import java.util.*;
 
 @Slf4j
 public class OpenAiCodeReview {
+
+    private static final int AI_CONNECT_TIMEOUT_MS = getIntEnv("AI_CONNECT_TIMEOUT_MS", 10000);
+    private static final int AI_READ_TIMEOUT_MS = getIntEnv("AI_READ_TIMEOUT_MS", 180000);
+    private static final int AI_MAX_RETRIES = getIntEnv("AI_MAX_RETRIES", 2);
+    private static final int AI_RETRY_BACKOFF_MS = getIntEnv("AI_RETRY_BACKOFF_MS", 2000);
 
     public static void main(String[] args) throws Exception {
         log.info("openai 代码评审，测试执行");
@@ -71,17 +77,6 @@ public class OpenAiCodeReview {
             throw new RuntimeException("环境变量 `ZHIPU_AI_API_KEY` 未设置");
         }
 
-        URL url = new URL("https://open.bigmodel.cn/api/paas/v4/chat/completions");
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-
-        connection.setRequestMethod("POST");
-        connection.setRequestProperty("Authorization", "Bearer " + token.trim());
-        connection.setRequestProperty("Content-Type", "application/json");
-        connection.setRequestProperty("User-Agent", "Java/11 OpenAiCodeReview");
-        connection.setDoOutput(true);
-        connection.setConnectTimeout(5000); // 5秒连接不上就报错
-        connection.setReadTimeout(90000);    // 90秒没返回结果就报错
-
         // 构建请求体
         List<ChatCompletionRequest.Prompt> prompts = new ArrayList<>();
         prompts.add(new ChatCompletionRequest.Prompt("system", "你是一个高级编程架构师，精通各类场景方案、架构设计和编程语言请，请您根据git diff记录，对代码做出评审。"));
@@ -90,44 +85,86 @@ public class OpenAiCodeReview {
         ChatCompletionRequest request = ChatCompletionRequest.builder()
                 .messages(prompts)
                 .build();
+        String requestBody = JSON.toJSONString(request);
 
-        try (OutputStream os = connection.getOutputStream()) {
-            byte[] input = JSON.toJSONString(request).getBytes(StandardCharsets.UTF_8);
-            os.write(input);
-            os.flush();
-        }
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= AI_MAX_RETRIES; attempt++) {
+            HttpURLConnection connection = null;
+            try {
+                URL url = new URL("https://open.bigmodel.cn/api/paas/v4/chat/completions");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setRequestProperty("Authorization", "Bearer " + token.trim());
+                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setRequestProperty("User-Agent", "Java/11 OpenAiCodeReview");
+                connection.setDoOutput(true);
+                connection.setConnectTimeout(AI_CONNECT_TIMEOUT_MS);
+                connection.setReadTimeout(AI_READ_TIMEOUT_MS);
 
-        int responseCode = connection.getResponseCode();
-        // 获取ai回复消息体，无论成功还是失败都要读取，以便调试和日志记录
-        String responseBody = readBody(connection, responseCode);
-        connection.disconnect();
+                try (OutputStream os = connection.getOutputStream()) {
+                    byte[] input = requestBody.getBytes(StandardCharsets.UTF_8);
+                    os.write(input);
+                    os.flush();
+                }
 
-        if (responseCode < 200 || responseCode >= 300) {
-            throw new RuntimeException("大模型请求失败，HTTP " + responseCode + "，响应：" + responseBody);
-        }
+                int responseCode = connection.getResponseCode();
+                // 获取 ai 回复消息体，无论成功还是失败都要读取，以便调试和日志记录
+                String responseBody = readBody(connection, responseCode);
 
-        // 解析响应体，提取评审内容
-        ChatCompletionSyncResponse response = JSON.parseObject(responseBody, ChatCompletionSyncResponse.class);
-        if (response == null || response.getChoices() == null || response.getChoices().isEmpty()
-                || response.getChoices().get(0) == null
-                || response.getChoices().get(0).getMessage() == null) {
-            throw new RuntimeException("响应结构异常，无法解析评审内容：" + responseBody);
-        }
+                if (responseCode < 200 || responseCode >= 300) {
+                    throw new RuntimeException("大模型请求失败，HTTP " + responseCode + "，响应：" + responseBody);
+                }
 
-        ChatCompletionSyncResponse.Message message = response.getChoices().get(0).getMessage();
-        StringBuilder reviewBuilder = new StringBuilder();
+                // 解析响应体，提取评审内容
+                ChatCompletionSyncResponse response = JSON.parseObject(responseBody, ChatCompletionSyncResponse.class);
+                if (response == null || response.getChoices() == null || response.getChoices().isEmpty()
+                        || response.getChoices().get(0) == null
+                        || response.getChoices().get(0).getMessage() == null) {
+                    throw new RuntimeException("响应结构异常，无法解析评审内容：" + responseBody);
+                }
 
-        if (message.getContent() != null) {
-            reviewBuilder.append(message.getContent());
-        }
-        if (message.getReasoning_content() != null && !message.getReasoning_content().isEmpty()) {
-            if (reviewBuilder.length() > 0) {
-                reviewBuilder.append("\n\n");
+                ChatCompletionSyncResponse.Message message = response.getChoices().get(0).getMessage();
+                StringBuilder reviewBuilder = new StringBuilder();
+
+                if (message.getContent() != null) {
+                    reviewBuilder.append(message.getContent());
+                }
+                if (message.getReasoning_content() != null && !message.getReasoning_content().isEmpty()) {
+                    if (reviewBuilder.length() > 0) {
+                        reviewBuilder.append("\n\n");
+                    }
+                    reviewBuilder.append("reasoning:\n").append(message.getReasoning_content());
+                }
+
+                return reviewBuilder.toString();
+            } catch (SocketTimeoutException e) {
+                lastException = e;
+                log.warn("ChatGLM 请求超时，第 {}/{} 次重试，connectTimeout={}ms, readTimeout={}ms",
+                        attempt, AI_MAX_RETRIES, AI_CONNECT_TIMEOUT_MS, AI_READ_TIMEOUT_MS);
+                if (attempt < AI_MAX_RETRIES) {
+                    Thread.sleep((long) AI_RETRY_BACKOFF_MS * attempt);
+                }
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
             }
-            reviewBuilder.append("reasoning:\n").append(message.getReasoning_content());
         }
 
-        return reviewBuilder.toString();
+        throw new RuntimeException("ChatGLM 请求连续超时，请增大 AI_READ_TIMEOUT_MS 或缩小本次 diff 后重试", lastException);
+    }
+
+    private static int getIntEnv(String key, int defaultValue) {
+        String value = System.getenv(key);
+        if (value == null || value.trim().isEmpty()) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            log.warn("环境变量 {} 非法：{}，使用默认值 {}", key, value, defaultValue);
+            return defaultValue;
+        }
     }
 
     /**
