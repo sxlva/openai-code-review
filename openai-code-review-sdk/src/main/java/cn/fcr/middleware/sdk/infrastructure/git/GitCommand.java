@@ -11,7 +11,10 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * @author 傅崇睿
@@ -81,7 +84,15 @@ public class GitCommand {
             // 2. 写文件
             String rawAuthor = gitConfig.getCommitAuthor();
             String cleanAuthor = rawAuthor.split("<")[0].trim();
-            String fileName = gitConfig.getCommitProject() + "-" + gitConfig.getCommitBranch() + "-" + cleanAuthor + System.currentTimeMillis() + "-" + RandomStringUtils.randomNumeric(4) + ".md";
+            String dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+            int randomNum = ThreadLocalRandom.current().nextInt(1000, 9999);
+            String fileName = String.format("%s-%s-%s-%s-%d.md",
+                    gitConfig.getCommitProject(),
+                    gitConfig.getCommitBranch(),
+                    cleanAuthor,
+                    dateStr,
+                    randomNum
+            );
             File newFile = new File(dateFolder, fileName);
             try (FileWriter writer = new FileWriter(newFile)) {
                 writer.write(recommend);
