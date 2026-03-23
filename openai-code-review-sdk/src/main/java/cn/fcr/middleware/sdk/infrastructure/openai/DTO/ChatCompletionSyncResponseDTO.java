@@ -1,4 +1,4 @@
-package cn.fcr.middleware.sdk.domain.model;
+package cn.fcr.middleware.sdk.infrastructure.openai.DTO;
 
 import lombok.Data;
 import java.util.List;
@@ -9,7 +9,7 @@ import java.util.List;
  * 对应服务端一次完整推理返回，包含候选结果与 token 用量统计。
  */
 @Data
-public class ChatCompletionSyncResponse {
+public class ChatCompletionSyncResponseDTO {
 
     /** 响应创建时间戳。 */
     private Long created;

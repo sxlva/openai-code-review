@@ -12,15 +12,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    # Job 级别注入，所有 steps（含 mvn clean install）均可读取
-    env:
-      ZHIPU_AI_API_KEY: ${{ secrets.ZHIPU_AI_API_KEY }}
-      GITHUB_TOKEN: ${{ secrets.CODE_TOKEN }}
-      APP_ID: ${{ secrets.APP_ID }}
-      APP_SECRET: ${{ secrets.APP_SECRET }}
-      TOUSER: ${{ secrets.TOUSER }}
-      TEMPLATE_ID: ${{ secrets.TEMPLATE_ID }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -39,5 +30,48 @@ jobs:
       - name: Copy openai-code-review-sdk JAR
         run: mvn dependency:copy -Dartifact=cn.fcr.middleware:openai-code-review-sdk:1.0 -DoutputDirectory=./libs
 
+      - name: Get repository name
+        id: repo-name
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
+
+      - name: Get branch name
+        id: branch-name
+        run: echo "BRANCH_NAME=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+
+      - name: Get commit author
+        id: commit-author
+        run: echo "COMMIT_AUTHOR=$(git log -1 --pretty=format:'%an <%ae>')" >> $GITHUB_ENV
+
+      - name: Get commit message
+        id: commit-message
+        run: echo "COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')" >> $GITHUB_ENV
+
+      - name: Print repository, branch name, commit author, and commit message
+        run: |
+          echo "Repository name is ${{ env.REPO_NAME }}"
+          echo "Branch name is ${{ env.BRANCH_NAME }}"
+          echo "Commit author is ${{ env.COMMIT_AUTHOR }}"
+          echo "Commit message is ${{ env.COMMIT_MESSAGE }}"
+
       - name: Run Code Review
         run: java -jar ./libs/openai-code-review-sdk-1.0.jar
+        env:
+          # 智谱AI 配置
+          CHATGLM_APIHOST: ${{ secrets.CHATGLM_APIHOST }}
+          CHATGLM_APIKEYSECRET: ${{ secrets.CHATGLM_APIKEYSECRET }}
+
+          # Github 环境配置
+          GITHUB_REVIEW_LOG_URI: ${{ secrets.CODE_REVIEW_LOG_URI }}
+          GITHUB_TOKEN: ${{ secrets.CODE_TOKEN }}
+
+          # Github 项目配置（由前序 steps 写入 GITHUB_ENV）
+          COMMIT_PROJECT: ${{ env.REPO_NAME }}
+          COMMIT_BRANCH: ${{ env.BRANCH_NAME }}
+          COMMIT_AUTHOR: ${{ env.COMMIT_AUTHOR }}
+          COMMIT_MESSAGE: ${{ env.COMMIT_MESSAGE }}
+
+          # 微信配置
+          WEIXIN_APPID: ${{ secrets.WEIXIN_APPID }}
+          WEIXIN_SECRET: ${{ secrets.WEIXIN_SECRET }}
+          WEIXIN_TOUSER: ${{ secrets.WEIXIN_TOUSER }}
+          WEIXIN_TEMPLATE_ID: ${{ secrets.WEIXIN_TEMPLATE_ID }}
