@@ -1,9 +1,8 @@
 package cn.fcr.middleware.sdk.types.utils;
 
 import com.alibaba.fastjson2.JSON;
-import io.github.cdimascio.dotenv.Dotenv;
-import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -15,49 +14,15 @@ import java.net.URL;
  * @date 2026/03/16 13:40
  * @description 具备缓存能力的微信 AccessToken 工具类
  */
-@Slf4j
 public class WXAccessTokenUtils {
 
-    /**
-     * 本地优先读取 .env 文件；CI 环境（GitHub Actions）无 .env 时自动降级到系统环境变量。
-     * ignoreIfMissing() 保证文件不存在时不抛异常。
-     */
-    private static final Dotenv DOTENV_CURRENT_DIR = Dotenv.configure()
-            .directory(".")
-            .ignoreIfMissing()
-            .load();
-    private static final Dotenv DOTENV_PARENT_DIR = Dotenv.configure()
-            .directory("..")
-            .ignoreIfMissing()
-            .load();
-
-    private static final String APPID = resolveEnv("APP_ID");
-    private static final String SECRET = resolveEnv("APP_SECRET");
+    private static final Logger logger = LoggerFactory.getLogger(WXAccessTokenUtils.class);
     private static final String GRANT_TYPE = "client_credential";
     private static final String URL_TEMPLATE = "https://api.weixin.qq.com/cgi-bin/token?grant_type=%s&appid=%s&secret=%s";
 
-    private static String resolveEnv(String key) {
-        String value = System.getenv(key);
-        if (value != null && !value.trim().isEmpty()) {
-            return value.trim();
-        }
-
-        value = DOTENV_CURRENT_DIR.get(key, null);
-        if (value != null && !value.trim().isEmpty()) {
-            return value.trim();
-        }
-
-        value = DOTENV_PARENT_DIR.get(key, null);
-        if (value != null && !value.trim().isEmpty()) {
-            return value.trim();
-        }
-
-        return null;
-    }
-
-    public static String getAccessToken() {
+    public static String getAccessToken(String appId, String secret) {
         try {
-            String urlString = String.format(URL_TEMPLATE, GRANT_TYPE, APPID, SECRET);
+            String urlString = String.format(URL_TEMPLATE, GRANT_TYPE, appId, secret);
             URL url = new URL(urlString);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
@@ -86,15 +51,30 @@ public class WXAccessTokenUtils {
                 return null;
             }
         } catch (Exception e) {
-            log.error("刷新微信AccessToken失败", e);
+            logger.error("刷新微信AccessToken失败", e);
             return null;
         }
     }
 
-    @Data
     public static class Token {
         private String access_token;
         private Integer expires_in;
+
+        public String getAccess_token() {
+            return access_token;
+        }
+
+        public void setAccess_token(String access_token) {
+            this.access_token = access_token;
+        }
+
+        public Integer getExpires_in() {
+            return expires_in;
+        }
+
+        public void setExpires_in(Integer expires_in) {
+            this.expires_in = expires_in;
+        }
     }
 
 }

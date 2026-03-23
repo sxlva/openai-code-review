@@ -1,4 +1,4 @@
-package cn.fcr.middleware.sdk.domain.model;
+package cn.fcr.middleware.sdk.infrastructure.openai.DTO;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +16,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ChatCompletionRequest {
+public class ChatCompletionRequestDTO {
 
     /** 目标模型标识。 */
     @Builder.Default
