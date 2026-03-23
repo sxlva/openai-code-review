@@ -68,9 +68,11 @@ public class OpenAiCodeReviewService extends AbstractOpenAiCodeReviewService {
     @Override
     protected void pushMessage(String logUrl) throws Exception {
         Map<String, Map<String, String>> data = new HashMap<>();
+        String rawAuthor = gitCommand.getAuthor();
+        String cleanAuthor = rawAuthor.split("<")[0].trim();
         TemplateMessageDTO.put(data, TemplateMessageDTO.TemplateKey.REPO_NAME, gitCommand.getProject());
         TemplateMessageDTO.put(data, TemplateMessageDTO.TemplateKey.BRANCH_NAME, gitCommand.getBranch());
-        TemplateMessageDTO.put(data, TemplateMessageDTO.TemplateKey.COMMIT_AUTHOR, gitCommand.getAuthor());
+        TemplateMessageDTO.put(data, TemplateMessageDTO.TemplateKey.COMMIT_AUTHOR, cleanAuthor);
         TemplateMessageDTO.put(data, TemplateMessageDTO.TemplateKey.COMMIT_MESSAGE, gitCommand.getMessage());
         weiXin.sendTemplateMessage(logUrl, data);
     }
