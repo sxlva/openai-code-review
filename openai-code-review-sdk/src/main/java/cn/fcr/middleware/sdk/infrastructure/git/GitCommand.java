@@ -79,7 +79,9 @@ public class GitCommand {
             }
 
             // 2. 写文件
-            String fileName = gitConfig.getCommitProject() + "-" + gitConfig.getCommitBranch() + "-" + gitConfig.getCommitAuthor() + System.currentTimeMillis() + "-" + RandomStringUtils.randomNumeric(4) + ".md";
+            String rawAuthor = gitConfig.getCommitAuthor();
+            String cleanAuthor = rawAuthor.split("<")[0].trim();
+            String fileName = gitConfig.getCommitProject() + "-" + gitConfig.getCommitBranch() + "-" + cleanAuthor + System.currentTimeMillis() + "-" + RandomStringUtils.randomNumeric(4) + ".md";
             File newFile = new File(dateFolder, fileName);
             try (FileWriter writer = new FileWriter(newFile)) {
                 writer.write(recommend);
