@@ -2,7 +2,6 @@ package cn.fcr.middleware.sdk.infrastructure.git;
 
 
 import cn.fcr.middleware.sdk.infrastructure.config.GitConfig;
-import org.apache.commons.lang3.RandomStringUtils;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.slf4j.Logger;
